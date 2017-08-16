@@ -1,0 +1,76 @@
+WITH 
+RECURSIVE 
+r AS 
+	(
+   SELECT id, 			  --Id учреждения
+   parent_id, 			  --id родительской записи
+   name,      			  --название учреждения
+   patients,  			  --кол-во пациентов
+   to_char (id, '99') as tree_id, --Id для создания дерева
+   1 as depth 			  --поле для определения уровня вложенности
+   FROM chrt
+   WHERE cat = 1		  --условие начала рекурсии с учреждения первого уровня
+
+   UNION ALL
+
+   SELECT 
+   chrt.id, 
+   chrt.parent_id, 
+   chrt.name, 
+   chrt.patients, 
+   r.tree_id||'.'||to_char ((row_number() over (order by chrt.id)), '99') as tree_id, --добавление к id дерева точки + номер строки, отсортированной по id
+   depth+1 as depth		  --поле определения уровня вложенности
+   FROM chrt
+     JOIN r
+	ON chrt.parent_id = r.id
+	)
+SELECT 
+--r.tree_id,
+--r.id,
+r.name, 
+case
+  when r.depth = 1 then 'Да'
+end "Головной",
+r.patients "Кол-во пациентов на стационаре",
+(
+WITH RECURSIVE rr AS 
+	(
+   SELECT 
+   id, 
+   parent_id, 
+   patients
+   FROM chrt
+   WHERE id = r.id
+   UNION ALL
+   SELECT chrt.id, chrt.parent_id, chrt.patients 
+   FROM chrt
+     JOIN rr
+	ON chrt.parent_id = rr.id --рекурсивный вывод всех подчиненных контрактов по дереву
+	)
+select sum (patients) as "Кол-во пациентов с дочерними" --суммирование значения пациентов
+from rr
+),
+(
+WITH RECURSIVE rr AS 
+	(
+   SELECT id, parent_id, patients
+   FROM chrt
+   WHERE id = r.id
+   UNION ALL
+   SELECT chrt.id, chrt.parent_id, chrt.patients 
+   FROM chrt
+      JOIN rr
+          ON chrt.parent_id = rr.id
+	)
+select sum (patients)  
+from rr --подсчет всех значений пациентов по дереву
+) 
+- 	
+(
+select coalesce (sum (patients),0) 
+from chrt
+where  r.id in (id, parent_id)
+and cat = 2
+) as "Кол-во пац. без головных дочерних" --вычитание значений пациентов дочерних головных учреждений
+FROM r
+order by r.tree_id

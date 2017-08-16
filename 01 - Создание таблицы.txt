@@ -1,0 +1,8 @@
+create table CHRT
+(
+id int not null primary key,		--id записи в таблице
+name varchar (128),			--название учреждения
+cat int,				--категория (уровень вложенности)
+parent_id int references chrt(id),	--id родительской записи
+patients int				--кол-во пациентов в данном учреждении
+);
